@@ -1,6 +1,12 @@
-from PIL import Image
+import PIL.Image as Image
+import uuid
+import pickle
+import os
+import random
 
-directory = 'res/chess'
+current_games = {}
+directory = './res/chess'
+savedir = directory+'/gamestate.sav'
 dictx = {
     'A': 0,
     'B': 1,
@@ -23,6 +29,16 @@ dicty = {
 }
 
 
+def save():
+    pickle.dump(current_games, open(savedir, 'wb'))
+
+
+def load():
+    if os.path.getsize(savedir) > 0:
+        current_games.clear()
+        current_games.update(pickle.load(open(savedir, 'rb')))
+
+
 def populate(board: dict):
     white = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
     black = [Rook, Knight, Bishop, King, Queen, Bishop, Knight, Rook]
@@ -37,7 +53,7 @@ def populate(board: dict):
         board[str(position4)] = white[i](position4, True, board)
 
 
-def render(board):
+def render(board, match_id):
     base = Image.open(directory + '/frame.png')
     boardimg = Image.open(directory + '/board.png')
 
@@ -48,7 +64,7 @@ def render(board):
             boardimg.paste(figure.icon, box, figure.icon)
 
     base.paste(boardimg, (64, 64))
-    path = 'res/chess/render.png'
+    path = directory + f'/games/{match_id}-render.png'
     base.save(path)
     return path
 
@@ -95,14 +111,13 @@ class Figure:
             return [1]
         else:
             vector = [directions[0] - self.position[0], directions[1] - self.position[1]]
+            print('vector:'+str(vector))
 
             position = self.position[:]
             if (vector[0] > self.range) or (vector[1] > self.range):
-                print(directions)
-                print(vector)
                 return [2]
 
-            if (vector[0] == vector[1]) and ('x' in self.movement):
+            if ('x' in self.movement) and (vector[0] == vector[1]):
                 while (vector[0] or vector[1]) not in range(-1, 2):
                     if self.vectormove(position, vector) is not None:
                         return [3]
@@ -120,11 +135,11 @@ class Figure:
                 return [4]
 
             self.vectormove(position, vector)
+            field = getpos(self.board, position)
             self.board[str(self.position)] = None
             self.position = position
             self.board[str(self.position)] = self
             self.mv += 1
-            field = getpos(self.board, position)
 
             if field is not None:
                 return [5, field]
@@ -173,28 +188,41 @@ class King(Figure):
         return super(King, self).move(directions)
 
 
-class Match:
-    def __init__(self):
+class ChessMatch:
+    def __init__(self, p1, p2):
         self.board = {}
+        self.id = uuid.uuid4()
+        self.players = [p1, p2]
+        self.p1frags = 0
+        self.p2frags = 0
+        self.turn = 1
+        self.whiteturn = True
+        self.current_player = self.players[int(self.whiteturn)]
+        current_games[self.id] = self
+        print('Chess match between ' + p1.user.name + ' and ' + p2.user.name + ' initialized with ID ' + str(self.id))
 
     def start(self):
         populate(self.board)
 
-    def image(self):
-        return render(self.board)
+        # TEMPORARY
+        if random.randrange(2) == 1:
+            self.players = list(reversed(self.players))
 
-    def move(self, arg: str, white: bool):
+        print('Chess match with ID ' + str(self.id) + ' started.')
+
+    def image(self):
+        return render(self.board, self.id)
+
+    def move(self, arg: str):
         movement = arg.split(':')
         start = [dictx.get(movement[0][0], 2137), dicty.get(movement[0][1], 420)]
         end = [dictx.get(movement[1][0], 69), dicty.get(movement[1][1], 100)]
         field = self.board.get(str(start))
 
         if not isinstance(field, Figure):
-            print('huj')
-            return 0
-        elif field.white != white:
-            print('huj1')
-            return 1
+            print('chuj')
+        elif field.white != self.whiteturn:
+            print('chuj1')
         else:
             print(field.move(end))
 
